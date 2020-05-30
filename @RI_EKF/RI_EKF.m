@@ -1,4 +1,4 @@
-classdef RI_EKF < handle
+ classdef RI_EKF < handle
     properties
         mu;          % state;
         Sigma;       % covariance;
@@ -19,18 +19,18 @@ classdef RI_EKF < handle
             %      0, 0, 1]
             obj.mu = eye(5);
             obj.Sigma = 0.1*eye(15);
-            obj.delta_t = 1;
+            obj.delta_t = 0.1;
             obj.g = [0; 0; -9.81];
-            obj.vk = blkdiag(eye(3), zeros(2));
-            obj.Q  = 100*eye(15);
+            obj.vk = blkdiag(0.1*eye(3), zeros(2));
+            obj.Q  = 0.1*eye(15);
             obj.bias = zeros(6, 1);
         end
         
         function prediction(obj, u)
             % input: 6-vector: [omega; a].
-            omega = u(1:3);
+            w = u(1:3);
             a = u(4:6);
-            w = obj.euler2so3(omega);
+%             w = obj.euler2so3(w);
             
             % Bias.
             w = w - obj.bias(1:3);
@@ -43,7 +43,7 @@ classdef RI_EKF < handle
             p = obj.mu(1:3, 5);
             AdX = obj.Adj(obj.mu);
             obj.mu(1:3, 1:3) = R*obj.Gamma(0, w*obj.delta_t);
-            obj.mu(1:3, 4) = v + R*obj.Gamma(1, w*obj.delta_t)*a + obj.g*obj.delta_t;
+            obj.mu(1:3, 4) = v + R*obj.Gamma(1, w*obj.delta_t)*a*obj.delta_t + obj.g*obj.delta_t;
             obj.mu(1:3, 5) = p + v*obj.delta_t + R*obj.Gamma(2, w*obj.delta_t)*a*obj.delta_t^2 + 0.5*obj.g*obj.delta_t^2;        
         
             % Covariance propagation.
@@ -55,27 +55,36 @@ classdef RI_EKF < handle
             A_r(4:6, 13:15) = -R;
             A_r(7:9, 10:12) = -obj.vec2skew(p)*R;
             % Phi: transition matrix.
-            Phi = expm(A_r);
+            Phi = expm(A_r*obj.delta_t);
             AdX = blkdiag(AdX, eye(6));
-            obj.Sigma = Phi*obj.Sigma*Phi' + AdX*obj.Q*AdX';
+            obj.Sigma = Phi*obj.Sigma*Phi' + obj.delta_t*AdX*Phi*obj.Q*Phi'*AdX';
+%             disp(obj.mu);
+%             disp(obj.Sigma);
         end
         
-        function propagation(obj, y)
+        function correction(obj, y)
             % input: y = [x, y, z], GPS information;
             y = [y; 0; 1];
-            H = [zeros(3), zeros(3), eye(3), zeros(3), zeros(3)];
+            H = [zeros(3), zeros(3), -eye(3), zeros(3), zeros(3)];
             b = [zeros(4, 1); 1];
-            N = obj.mu * obj.vk * obj.mu';
+            R = obj.mu(1:3, 1:3);
+            N = R * obj.vk(1:3, 1:3) * R';
+            
             S = H*obj.Sigma*H' + N(1:3, 1:3);
+            disp(det(S))
             L = obj.Sigma*H' / S;
             
             r = obj.mu*y - b;
+            disp(r);
             r = r(1:3);
             r = L * r;
+            
             [state, b] = obj.stateMat(r);
+            
             obj.bias = obj.bias + b;
             obj.mu = expm(state)*obj.mu;
             obj.Sigma = (eye(15)-L*H)*obj.Sigma*(eye(15)-L*H)' + L*N(1:3, 1:3)*L';
+            disp(obj.mu)
         end
         
         function [state, bias] = stateMat(obj, vec)
@@ -84,13 +93,13 @@ classdef RI_EKF < handle
             twistR = vec(1:3);
             v = vec(4:6);
             p = vec(7:9);
-            state = eye(5);
+            state = blkdiag(eye(3), zeros(2));
             state(1:3, 1:3) = obj.vec2skew(twistR);
             state(1:3, 4) = v;
             state(1:3, 5) = p;
             bias = vec(10:15);
         end
-        
+
         function R = euler2so3(obj, w)
             % input: w = [roll, pitch, yaw]
             rx = w(1);
