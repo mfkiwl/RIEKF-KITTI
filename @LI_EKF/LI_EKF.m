@@ -16,7 +16,6 @@ classdef LI_EKF < handle
             obj.mu(1:3, 5) = mu_init(1:3, 4);
             obj.mu(1:3, 4) = v_init;
             obj.Sigma = sigma_init;
-%             obj.Sigma = 0.1*eye(15);
             
             obj.delta_t = 0.1;
             obj.g = [0; 0; -9.81];

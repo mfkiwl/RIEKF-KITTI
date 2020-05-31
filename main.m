@@ -15,8 +15,9 @@ m = imuMeasure(oxts);
 mu_init = eye(4);
 sigma_init = eye(15);
 v_init = [oxts{1}(9);oxts{1}(10);oxts{1}(11)];
-filter = LI_EKF(mu_init, sigma_init, v_init);
 
+filter = LI_EKF(mu_init, sigma_init, v_init);
+% filter = RI_EKF(mu_init, sigma_init, v_init);
 traj = [];
 traj_gt = [];
 for i = 2:length(pos)
